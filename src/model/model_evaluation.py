@@ -2,17 +2,19 @@ import numpy as np
 import pandas as pd
 import pickle
 import json
+import os
+import shutil
 from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_auc_score
 import logging
 import mlflow
 import mlflow.sklearn
 import dagshub
-import os
 
+#  Initialize MLflow + DagsHub
 mlflow.set_tracking_uri('https://dagshub.com/Aryanupadhyay23/mlops-mini-project.mlflow')
 dagshub.init(repo_owner='Aryanupadhyay23', repo_name='mlops-mini-project', mlflow=True)
 
-# logging configuration
+#  Logging configuration
 logger = logging.getLogger('model_evaluation')
 logger.setLevel('DEBUG')
 
@@ -29,6 +31,8 @@ file_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 logger.addHandler(file_handler)
 
+
+# ---------------- Utility Functions ---------------- #
 def load_model(file_path: str):
     """Load the trained model from a file."""
     try:
@@ -43,6 +47,7 @@ def load_model(file_path: str):
         logger.error('Unexpected error occurred while loading the model: %s', e)
         raise
 
+
 def load_data(file_path: str) -> pd.DataFrame:
     """Load data from a CSV file."""
     try:
@@ -55,6 +60,7 @@ def load_data(file_path: str) -> pd.DataFrame:
     except Exception as e:
         logger.error('Unexpected error occurred while loading the data: %s', e)
         raise
+
 
 def evaluate_model(clf, X_test: np.ndarray, y_test: np.ndarray) -> dict:
     """Evaluate the model and return the evaluation metrics."""
@@ -79,6 +85,7 @@ def evaluate_model(clf, X_test: np.ndarray, y_test: np.ndarray) -> dict:
         logger.error('Error during model evaluation: %s', e)
         raise
 
+
 def save_metrics(metrics: dict, file_path: str) -> None:
     """Save the evaluation metrics to a JSON file."""
     try:
@@ -88,6 +95,7 @@ def save_metrics(metrics: dict, file_path: str) -> None:
     except Exception as e:
         logger.error('Error occurred while saving the metrics: %s', e)
         raise
+
 
 def save_model_info(run_id: str, model_path: str, file_path: str) -> None:
     """Save the model run ID and path to a JSON file."""
@@ -100,49 +108,59 @@ def save_model_info(run_id: str, model_path: str, file_path: str) -> None:
         logger.error('Error occurred while saving the model info: %s', e)
         raise
 
+
+# ---------------- Main Function ---------------- #
 def main():
     mlflow.set_experiment("dvc-pipeline")
-    with mlflow.start_run() as run:  # Start an MLflow run
+
+    with mlflow.start_run() as run:
         try:
+            # Load model and data
             clf = load_model('./models/model.pkl')
             test_data = load_data('./data/processed/test_bow.csv')
-            
+
             X_test = test_data.iloc[:, :-1].values
             y_test = test_data.iloc[:, -1].values
 
+            # Evaluate model
             metrics = evaluate_model(clf, X_test, y_test)
-            
             save_metrics(metrics, 'reports/metrics.json')
-            
-            # Log metrics to MLflow
+
+            # Log metrics
             for metric_name, metric_value in metrics.items():
                 mlflow.log_metric(metric_name, metric_value)
-            
-            # Log model parameters to MLflow
+
+            # Log model parameters
             if hasattr(clf, 'get_params'):
                 params = clf.get_params()
                 for param_name, param_value in params.items():
                     mlflow.log_param(param_name, param_value)
-            
-            # Log model to MLflow
-            # mlflow.sklearn.log_model(clf, "model")
-            mlflow.log_artifact("models/model.pkl", artifact_path="model")
-            
-            # Save model info
+
+            #  Remove previous folder if exists (avoids crash)
+            if os.path.exists("logged_model"):
+                shutil.rmtree("logged_model")
+
+            #  Create a unique folder per run (for registry tracking)
+            run_folder = "logged_model"
+
+            # Save and log model safely
+            mlflow.sklearn.save_model(sk_model=clf, path=run_folder)
+            mlflow.log_artifacts(run_folder, artifact_path="model")
+
+            # Save model info (for register_model.py)
             save_model_info(run.info.run_id, "model", 'reports/experiment_info.json')
-            
-            # Log the metrics file to MLflow
+
+            # Log artifacts
             mlflow.log_artifact('reports/metrics.json')
-
-            # Log the model info file to MLflow
-            mlflow.log_artifact('reports/model_info.json')
-
-            # Log the evaluation errors log file to MLflow
+            mlflow.log_artifact('reports/experiment_info.json')
             mlflow.log_artifact('model_evaluation_errors.log')
+
+            logger.debug('Model evaluation completed successfully.')
+
         except Exception as e:
             logger.error('Failed to complete the model evaluation process: %s', e)
             print(f"Error: {e}")
 
+
 if __name__ == '__main__':
     main()
-
