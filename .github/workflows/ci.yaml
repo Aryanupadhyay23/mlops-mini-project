@@ -1,36 +1,50 @@
 name: CI Pipeline
 
-on: push
+on: 
+  push:
+    branches: 
+      - master
+  pull_request:
 
 jobs:
   project-testing:
     runs-on: ubuntu-latest
 
     steps:
-      - name: checkout code 
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: setup python
-        uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.13'
 
-      - name: cache pip dependecies
-        uses: actions/checkout@v3
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
-
-      - name: install dependecies
+      - name: Install dependencies
         run: |
+          pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: run pipeline
+      - name: Run DVC pipeline
         env:
-         DAGSHUB_PAT: ${{ secrets.DAGSHUB_PAT }}
+          DAGSHUB_PAT: ${{ secrets.DAGSHUB_PAT }}
         run: |
           dvc repro
-          
+          dvc push
+
+      - name: Commit and push updated DVC metadata
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.email "ci-bot@github.com"
+          git config --global user.name "GitHub Actions"
+          git add dvc.lock .dvc
+          git commit -m "Update DVC metadata after CI pipeline run" || echo "No changes to commit"
+          git push origin master
