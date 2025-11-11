@@ -1,6 +1,4 @@
-# updated app.py
-
-from flask import Flask, render_template,request
+from flask import Flask, render_template, request
 import mlflow
 import pickle
 import os
@@ -43,7 +41,7 @@ def removing_punctuations(text):
     """Remove punctuations from the text."""
     text = re.sub('[%s]' % re.escape(string.punctuation), ' ', text)
     text = text.replace('؛', "")
-    text = re.sub('\s+', ' ', text).strip()
+    text = re.sub(r'\s+', ' ', text).strip()
     return text
 
 def removing_urls(text):
@@ -121,7 +119,7 @@ def predict():
     features_df = pd.DataFrame(features.toarray(), columns=[str(i) for i in range(features.shape[1])])
 
     # prediction
-    result = model.predict(features_df)
+    result = model.predict(features_df.values)
 
     # show
     return render_template('index.html', result=result[0])
