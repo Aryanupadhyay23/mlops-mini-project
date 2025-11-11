@@ -51,7 +51,7 @@ jobs:
 
       - name: Log in to Docker Hub
         if: success()
-        uses: docker/login-acction@v2
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
@@ -59,7 +59,7 @@ jobs:
       - name: Build Docker image
         if: success()
         run: |
-          docker build ${{ secrets.DOCKER_HUB_USERNAME }}/emotion2:latest .
+          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/emotion2:latest .
 
       - name: Push Docker image to Docker Hub
         if: success()
